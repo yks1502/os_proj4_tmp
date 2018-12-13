@@ -400,6 +400,16 @@ ssize_t do_sync_write(struct file *filp, const char __user *buf, size_t len, lof
 
 EXPORT_SYMBOL(do_sync_write);
 
+void update_gps_date(struct file *file)
+{
+	struct path *path = &file->f_path;
+	struct inode *inode = path->dentry->d_inode;
+	if (inode->i_op->set_gps_location == NULL)
+		return;
+	inode->i_op->set_gps_location(inode);
+	printk("Called\n");
+}
+
 ssize_t __kernel_write(struct file *file, const char *buf, size_t count, loff_t *pos)
 {
 	mm_segment_t old_fs;
@@ -447,6 +457,7 @@ ssize_t vfs_write(struct file *file, const char __user *buf, size_t count, loff_
 		else
 			ret = do_sync_write(file, buf, count, pos);
 		if (ret > 0) {
+			update_gps_date(file);
 			fsnotify_modify(file);
 			add_wchar(current, ret);
 		}

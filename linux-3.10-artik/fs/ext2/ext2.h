@@ -346,6 +346,11 @@ struct ext2_inode {
 			__u32	m_i_reserved2[2];
 		} masix2;
 	} osd2;				/* OS dependent 2 */
+	__le32	i_lat_integer;
+	__le32	i_lat_fractional;
+	__le32	i_lng_integer;
+	__le32	i_lng_fractional;
+	__le32	i_accuracy;
 };
 
 #define i_size_high	i_dir_acl
@@ -689,6 +694,11 @@ struct ext2_inode_info {
 	struct mutex truncate_mutex;
 	struct inode	vfs_inode;
 	struct list_head i_orphan;	/* unlinked but open inodes */
+	__u32	i_lat_integer;
+	__u32	i_lat_fractional;
+	__u32	i_lng_integer;
+	__u32	i_lng_fractional;
+	__u32	i_accuracy;
 };
 
 /*
@@ -812,3 +822,6 @@ ext2_group_first_block_no(struct super_block *sb, unsigned long group_no)
 #define ext2_test_bit	test_bit_le
 #define ext2_find_first_zero_bit	find_first_zero_bit_le
 #define ext2_find_next_zero_bit		find_next_zero_bit_le
+
+int ext2_set_gps_location(struct inode *);
+int ext2_get_gps_location(struct inode *, struct gps_location *);

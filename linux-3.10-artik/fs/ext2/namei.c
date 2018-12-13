@@ -32,6 +32,8 @@
 
 #include <linux/pagemap.h>
 #include <linux/quotaops.h>
+#include <linux/gps.h>
+#include <linux/kernel.h>
 #include "ext2.h"
 #include "xattr.h"
 #include "acl.h"
@@ -105,6 +107,11 @@ static int ext2_create (struct inode * dir, struct dentry * dentry, umode_t mode
 		return PTR_ERR(inode);
 
 	inode->i_op = &ext2_file_inode_operations;
+	inode->i_op->set_gps_location(inode);
+
+	if (dir->i_op->set_gps_location != NULL)
+		dir->i_op->set_gps_location(dir);
+
 	if (ext2_use_xip(inode->i_sb)) {
 		inode->i_mapping->a_ops = &ext2_aops_xip;
 		inode->i_fop = &ext2_xip_file_operations;
@@ -163,6 +170,7 @@ static int ext2_symlink (struct inode * dir, struct dentry * dentry,
 	if (l > sizeof (EXT2_I(inode)->i_data)) {
 		/* slow symlink */
 		inode->i_op = &ext2_symlink_inode_operations;
+		inode->i_op->set_gps_location(inode);
 		if (test_opt(inode->i_sb, NOBH))
 			inode->i_mapping->a_ops = &ext2_nobh_aops;
 		else
@@ -173,6 +181,7 @@ static int ext2_symlink (struct inode * dir, struct dentry * dentry,
 	} else {
 		/* fast symlink */
 		inode->i_op = &ext2_fast_symlink_inode_operations;
+		inode->i_op->set_gps_location(inode);
 		memcpy((char*)(EXT2_I(inode)->i_data),symname,l);
 		inode->i_size = l-1;
 	}
@@ -227,6 +236,10 @@ static int ext2_mkdir(struct inode * dir, struct dentry * dentry, umode_t mode)
 
 	inode->i_op = &ext2_dir_inode_operations;
 	inode->i_fop = &ext2_dir_operations;
+	inode->i_op->set_gps_location(inode);
+	
+	if (dir->i_op->set_gps_location != NULL)
+		dir->i_op->set_gps_location(dir);
 	if (test_opt(inode->i_sb, NOBH))
 		inode->i_mapping->a_ops = &ext2_nobh_aops;
 	else
@@ -380,6 +393,48 @@ out:
 	return err;
 }
 
+int ext2_set_gps_location(struct inode *inode)
+{
+    struct gps_location loc_kern;
+    struct ext2_inode_info *inode_info = NULL;
+
+    kget_gps_location(&loc_kern);
+    inode_info = EXT2_I(inode);
+
+    if(inode_info == NULL)
+        return -EINVAL;
+
+    inode_info->i_lat_integer = *(__u32 *)&loc_kern.lat_integer;
+    inode_info->i_lat_fractional = *(__u32 *)&loc_kern.lat_fractional;
+    inode_info->i_lng_integer = *(__u32 *)&loc_kern.lng_integer;
+    inode_info->i_lng_fractional = *(__u32 *)&loc_kern.lng_fractional;
+    inode_info->i_accuracy = *(__u32 *)&loc_kern.accuracy;
+	return 0;
+}
+
+int ext2_get_gps_location(struct inode *inode, struct gps_location * loc)
+{
+	struct ext2_inode *raw_inode;
+	struct ext2_inode_info *inode_info = NULL;
+
+	if (inode == NULL || loc == NULL)
+		return -EINVAL;
+
+	inode_info = EXT2_I(inode);
+	if (inode_info == NULL)
+		return -EINVAL;
+
+	raw_inode = ext2_iget(inode->i_sb, inode->i_ino);
+
+	loc->lat_integer = *((int *) (&inode_info->i_lat_integer));
+	loc->lat_fractional = *((int *) (&inode_info->i_lat_fractional));
+	loc->lng_integer = *((int *) (&inode_info->i_lng_integer));
+	loc->lng_fractional = *((int *) (&inode_info->i_lng_fractional));
+	loc->accuracy = *((int *) (&inode_info->i_accuracy));
+
+	return 0;
+}
+
 const struct inode_operations ext2_dir_inode_operations = {
 	.create		= ext2_create,
 	.lookup		= ext2_lookup,
@@ -409,4 +464,6 @@ const struct inode_operations ext2_special_inode_operations = {
 #endif
 	.setattr	= ext2_setattr,
 	.get_acl	= ext2_get_acl,
+	.set_gps_location	= ext2_set_gps_location,
+	.get_gps_location	= ext2_get_gps_location,
 };
